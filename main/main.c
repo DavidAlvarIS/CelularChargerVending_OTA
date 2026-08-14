@@ -13,15 +13,15 @@
 #include "esp_ota_ops.h"
 #include "esp_mac.h"  // Para obtener la dirección MAC    
 
-#define positionlights GPIO_NUM_2
+#define positionlights GPIO_NUM_8
 
-#define VERSION "1.0.6"
-#define VERSION_URL "https://raw.githubusercontent.com/DavidAlvarIS/Base_OTA_MAX3D/refs/heads/main/version.txt"
+#define VERSION "1.0.0" // Versión actual del firmware
+#define VERSION_URL "https://raw.githubusercontent.com/DavidAlvarIS/CelularChargerVending_OTA/refs/heads/main/version.txt?token=GHSAT0AAAAAAEFFI5TTW55WC3XPU3OFKTQU2T6COVQ"
 
 // Dirección MAC esperada (cámbiala por la de tu ESP32)
-#define EXPECTED_MAC {0x34, 0xB7, 0xDA, 0xF9, 0x3F, 0x58}  // Reemplaza XX con los bytes reales
+#define EXPECTED_MAC {0x1C, 0xDB, 0xD4, 0x35, 0x96, 0x50}  // Reemplaza XX con los bytes reales
 
-static const char *TAG = "Max3DLightCtrl"; // Nombre de mi chip y etiqueta para logs. 
+static const char *TAG = "CelChargeVending"; // Nombre de mi chip y etiqueta para logs. 
 #define STACK_SIZE 1024 * 2
 
 // Variables para progreso OTA
@@ -189,7 +189,7 @@ bool check_for_update(void)
     char buffer[64] = {0};
     int read_len = esp_http_client_read(client, buffer, sizeof(buffer) - 1);
     if (read_len <= 0) {
-        ESP_LOGE("Max3DLightCtrl", "Error al leer version.txt");
+        ESP_LOGE("CelChargeVending", "Error al leer version.txt");
         esp_http_client_cleanup(client);
         return false;
     }
@@ -201,7 +201,7 @@ bool check_for_update(void)
     newline = strchr(buffer, '\n');
     if (newline) *newline = '\0';
 
-    ESP_LOGI("Max3DLightCtrl", "Versión actual: %s, Versión remota: %s", VERSION, buffer);
+    ESP_LOGI("CelChargeVending", "Versión actual: %s, Versión remota: %s", VERSION, buffer);
     bool update_needed = (strcmp(VERSION, buffer) != 0);
     esp_http_client_cleanup(client);
     return update_needed;
@@ -213,14 +213,14 @@ esp_err_t progress_callback(esp_http_client_event_t *evt)
         case HTTP_EVENT_ON_HEADER:
             if (strcmp(evt->header_key, "Content-Length") == 0) {
                 total_size = atoi(evt->header_value);
-                ESP_LOGI("Max3DLightCtrl", "Tamaño total: %u bytes", total_size);
+                ESP_LOGI("CelChargeVending", "Tamaño total: %u bytes", total_size);
             }
             break;
         case HTTP_EVENT_ON_DATA:
             downloaded += evt->data_len;
             if (total_size > 0) {
                 int progress = (downloaded * 100) / total_size;
-                ESP_LOGI("Max3DLightCtrl", "Progreso: %d%% (%u/%u bytes)", progress, downloaded, total_size);
+                ESP_LOGI("CelChargeVending", "Progreso: %d%% (%u/%u bytes)", progress, downloaded, total_size);
             }
             break;
         case HTTP_EVENT_DISCONNECTED:
@@ -242,24 +242,24 @@ void vTask_ota_task(void *pvParameter)
 
     if ((bits & CONNECTED_BIT) == 0)
     {
-        ESP_LOGI("Max3DLightCtrl", "No se pudo conectar a WiFi en 30s. OTA cancelada.");
+        ESP_LOGI("CelChargeVending", "No se pudo conectar a WiFi en 30s. OTA cancelada.");
         vTaskDelete(NULL);
         return;
     }
 
-    ESP_LOGI("Max3DLightCtrl", "WiFi conectado, comprobando versión...");
-    ESP_LOGI("Max3DLightCtrl", "Free heap: %lu", esp_get_free_heap_size());
+    ESP_LOGI("CelChargeVending", "WiFi conectado, comprobando versión...");
+    ESP_LOGI("CelChargeVending", "Free heap: %lu", esp_get_free_heap_size());
 
     if (!check_for_update())// 
     {
-        ESP_LOGI("Max3DLightCtrl", "Versión actual ya es la última. No se requiere OTA.");
+        ESP_LOGI("CelChargeVending", "Versión actual ya es la última. No se requiere OTA.");
         vTaskDelete(NULL);
         return;
     }
 
-    ESP_LOGI("Max3DLightCtrl", "Nueva versión disponible. Iniciando OTA...");
+    ESP_LOGI("CelChargeVending", "Nueva versión disponible. Iniciando OTA...");
     esp_http_client_config_t config = {
-        .url = "https://github.com/DavidAlvarIS/Base_OTA_MAX3D/releases/download/ControlCarLights_Firmware/Base_OTA_MAX3D.bin",
+        .url = "https://github.com/DavidAlvarIS/CelularChargerVending_OTA/releases/download/v1.0.0/CelularChargerVending_OTA.bin",
         .crt_bundle_attach = esp_crt_bundle_attach,
         .buffer_size = 16384,
         .buffer_size_tx = 1024,
@@ -276,12 +276,12 @@ void vTask_ota_task(void *pvParameter)
 
     if (ret == ESP_OK)
     {
-        ESP_LOGI("Max3DLightCtrl", "OTA completada exitosamente. Reiniciando...");
+        ESP_LOGI("CelChargeVending", "OTA completada exitosamente. Reiniciando...");
         esp_restart();
     }
     else
     {
-        ESP_LOGE("Max3DLightCtrl", "OTA falló. Código: 0x%x", ret);
+        ESP_LOGE("CelChargeVending", "OTA falló. Código: 0x%x", ret);
         wifi_shutdown();   // <--- Apagar WiFi antes de salir
     }
 
@@ -295,13 +295,33 @@ void vtask_Basic_LED_Blink(void *pvParameters)
     {
         // Control de luces de posición
         gpio_set_level(positionlights, 1); // Encender luces de posición
+        ESP_LOGI(TAG, "Luces de posición encendidas");
         vTaskDelay(pdMS_TO_TICKS(BlinkTime));    // Esperar 1 segundo
         gpio_set_level(positionlights, 0); // Apagar luces de posición
+        ESP_LOGI(TAG, "Luces de posición apagadas");
         vTaskDelay(pdMS_TO_TICKS(BlinkTime));    // Esperar 1 segundo
     }
 }
 
 // Función para verificar la dirección MAC
+
+bool print_mac_address() {
+    uint8_t mac[6];
+    esp_err_t ret = esp_read_mac(mac, ESP_MAC_WIFI_STA); // Leer la dirección MAC de la interfaz WiFi STA
+
+    if (ret != ESP_OK) { // Verificar si la lectura fue exitosa
+        ESP_LOGE(TAG, "Error al leer MAC: %s", esp_err_to_name(ret)); // Imprimir mensaje de error si la lectura falla
+        return false;
+    }
+
+    ESP_LOGI(TAG, "MAC WiFi STA: %02X:%02X:%02X:%02X:%02X:%02X", // Imprimir la dirección MAC en formato hexadecimal
+             mac[0], mac[1], mac[2],
+             mac[3], mac[4], mac[5]);
+
+    return true;
+}
+
+
 bool check_mac_address() {
     uint8_t mac[6];
     esp_err_t ret = esp_read_mac(mac, ESP_MAC_WIFI_STA);
@@ -322,6 +342,7 @@ bool check_mac_address() {
 
 void app_main(void)
 {
+    print_mac_address();
     // Verificar MAC antes de inicializar
     if (!check_mac_address()) {
         ESP_LOGE(TAG, "Firmware bloqueado por MAC no válida.");
