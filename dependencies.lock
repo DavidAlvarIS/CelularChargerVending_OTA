@@ -1,0 +1,18 @@
+dependencies:
+  idf:
+    source:
+      type: idf
+    version: 5.4.2
+  lexus2k/ssd1306:
+    component_hash: ae47d0629b88a2aaf44d5814695ddba9c204394e41d67937689b44bc45a6b79d
+    dependencies: []
+    source:
+      git: https://github.com/lexus2k/ssd1306.git
+      path: .
+      type: git
+    version: 3a264d847c89a8c10d0a16da1315b785045c5017
+direct_dependencies:
+- lexus2k/ssd1306
+manifest_hash: f50339128d8c590ec87ae1bb7a659d8210ca38eb0fcfc6a05609fb59b5edbe4d
+target: esp32c3
+version: 2.0.0
