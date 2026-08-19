@@ -30,12 +30,21 @@
 #define ACCOUNTING_HOLD_TIME_MS 3000
 #define ACCOUNTING_CONFIRM_TIME_MS 10000
 
-// Minutos de crédito por moneda
+#define selection_ChargerPort1 GPIO_NUM_4
+#define selection_ChargerPort2 GPIO_NUM_6
+#define selection_ChargerPort3 GPIO_NUM_7
+/*
+Pines 8 y 9 son usados para la pantala oled
+.scl_io_num = GPIO_NUM_9,
+.sda_io_num = GPIO_NUM_8,
+*/
+
+// Minutos de Credito por moneda
 #define CREDIT_MINUTES_PER_COIN 1
 // Conversión a segundos
 #define CREDIT_SECONDS_PER_COIN \
     (CREDIT_MINUTES_PER_COIN * 60)
-// Crédito restante en segundos
+// Credito restante en segundos
 volatile uint32_t creditTimeSeconds = 0;
 
 // Cantidad total de monedas recibidas
@@ -70,24 +79,23 @@ static int retry_num = 0;
 int BlinkTime = 300; // Tiempo de parpadeo en milisegundos
 
 // Prototipos de funciones
-esp_err_t init_PIN(void);
+//esp_err_t init_PIN(void);
 esp_err_t create_tasks(void);
 static void wifi_shutdown(void);
 void ssd1306_128x64_i2c_init(void);
-void ssd1306_fill_screen(uint8_t color);
-void ssd1306_set_fixed_font(const uint8_t *font);
 void ssd1306_update_time(const char *time_str);
 
 void vTask_ota_task(void *pvParameters);
 void vTask_AccountingButton(void *pvParameters);
 
-esp_err_t init_PIN(void)
+/*esp_err_t init_PIN(void)
 {
     gpio_reset_pin(celChargerPort1);
     gpio_set_direction(celChargerPort1, GPIO_MODE_OUTPUT);
 
     return ESP_OK;
 }
+    */
 
 esp_err_t create_tasks(void)
 {
@@ -682,7 +690,7 @@ void vTask_AccountingButton(void *pvParameters)
                  */
                 ssd1306_clear();
 
-                ssd1306_print_str(1, 0, "CORTE CONTABLE:", false);
+                ssd1306_print_str(0, 8, "CORTE CONTABLE", false);
                 // ssd1306_display();
 
                 char bufferMonedasHistory[32];
@@ -692,7 +700,7 @@ void vTask_AccountingButton(void *pvParameters)
                     "TOTAL COINS: %lu",
                     (unsigned long)totalCoinsReceived);
 
-                ssd1306_print_str(1, 15, bufferMonedasHistory, false);
+                ssd1306_print_str(0, 24, bufferMonedasHistory, false);
                 
                 char bufferConfirmXsecs[32];
                 snprintf(
@@ -701,7 +709,7 @@ void vTask_AccountingButton(void *pvParameters)
                     "CONFIRMAR x %lu s",
                     (unsigned long)(ACCOUNTING_CONFIRM_TIME_MS / 1000));
 
-                ssd1306_print_str(1, 30, bufferConfirmXsecs, false);
+                ssd1306_print_str(0, 40, bufferConfirmXsecs, false);
                 ssd1306_display();
 
                 /*
@@ -731,7 +739,7 @@ void vTask_AccountingButton(void *pvParameters)
                         if (err == ESP_OK)
                         {
                             ssd1306_clear();
-                            ssd1306_print_str(1, 0, "CORTE OK", false);
+                            ssd1306_print_str(0, 8, "CORTE OK", false);
 
                             
                             snprintf(
@@ -741,9 +749,9 @@ void vTask_AccountingButton(void *pvParameters)
                                 (unsigned long)
                                     lastCutCoins);
 
-                            ssd1306_print_str(1, 15, bufferMonedasHistory, false); // Se imprime el valor que se pasara como historial del ultimo corte
+                            ssd1306_print_str(0, 24, bufferMonedasHistory, false); // Se imprime el valor que se pasara como historial del ultimo corte
 
-                            ssd1306_print_str(1, 30, "NUEVO TOTAL: 0", false); // Se pone nuevo total igual a cero para 
+                            ssd1306_print_str(0, 48, "NUEVO TOTAL: 0", false); // Se pone nuevo total igual a cero para 
                             ssd1306_display();
 
                             ESP_LOGI(TAG,"CORTE CONTABLE CONFIRMADO");
@@ -752,7 +760,7 @@ void vTask_AccountingButton(void *pvParameters)
                         else
                         {
                             ssd1306_clear();
-                            ssd1306_print_str(1, 15, "ERROR CORTE", false);
+                            ssd1306_print_str(0, 32, "ERROR CORTE", false);
 
                             ESP_LOGE(
                                 TAG,
@@ -789,7 +797,7 @@ void vTask_AccountingButton(void *pvParameters)
                 {
                     ssd1306_clear();
 
-                    ssd1306_print_str(1, 15, "CORTE CANCELADO", false);
+                    ssd1306_print_str(0, 32, "CORTE CANCELADO", false);
                     ssd1306_display();
                     //ssd1306_clear();
 
@@ -819,6 +827,7 @@ void vTask_AccountingButton(void *pvParameters)
 
 /* ============================================================
  * TAREA QUE PROCESA LAS MONEDAS
+ RECIBE AVISO DESDE LA INTERRUPCION DE MONEDA DETECTADA
  * ============================================================ */
 
 void vTask_Coin(void *pvParameters)
@@ -832,9 +841,9 @@ void vTask_Coin(void *pvParameters)
                 &coinEvent,
                 portMAX_DELAY) == pdTRUE)
         {
-            coinCount++;
-            totalCoinsReceived++;
-            save_accounting_data();
+            coinCount++; // Contador actual
+            totalCoinsReceived++; //Contador global historico desde el ultimo corte de caja
+            save_accounting_data(); //Se guarda historico en memoria nvs
             if (save_accounting_data() != ESP_OK)
             {
                 ESP_LOGE(TAG, "No se pudo guardar el total de monedas");
@@ -852,7 +861,7 @@ void vTask_Coin(void *pvParameters)
             /*
              * Activar cargador.
              */
-            gpio_set_level(celChargerPort1, 1);
+            gpio_set_level(celChargerPort1, 0);
 
             ESP_LOGI(TAG, "================================");
             ESP_LOGI(TAG, "MONEDA #%lu", (unsigned long)coinCount);
@@ -881,7 +890,7 @@ void vTask_CreditTimer(void *pvParameters)
         {
             creditTimeSeconds--;
 
-            gpio_set_level(celChargerPort1, 1);
+            gpio_set_level(celChargerPort1, 0);
 
             char tiempo_str[32];
 
@@ -893,35 +902,30 @@ void vTask_CreditTimer(void *pvParameters)
                      (unsigned long)(creditTimeSeconds / 60),
                      (unsigned long)(creditTimeSeconds % 60));
 
-            ssd1306_print_str(1, 0, "Credito:", false);
-            // ssd1306_print_str(1, 15, tiempo_str, false);
+            ssd1306_print_str(0, 16, "Credito", false);
+         
 
             ssd1306_update_time(tiempo_str);
             // Enviar framebuffer completo al OLED
             ssd1306_display();
 
             /*
-             * Se terminó el crédito.
+             * Se terminó el Credito.
              */
             if (creditTimeSeconds == 0)
             {
-                gpio_set_level(celChargerPort1, 0);
+                gpio_set_level(celChargerPort1, 1); //1 es igual a apagar el rele
 
                 ESP_LOGI(TAG, "Credito agotado");
                 ESP_LOGI(TAG, "Cargador desactivado");
 
                 ssd1306_clear();
-                ssd1306_print_str(1, 0, "Credito:", false);
-                // ssd1306_print_str(1, 15, "Agotado:", false);
-                ssd1306_print_str(1, 17, tiempo_str, false);
-                // ssd1306_update_time(tiempo_str);
+                ssd1306_print_str(0, 6, "Credito", false);
+                ssd1306_print_str(0, 32, tiempo_str, false);
                 ssd1306_display();
             }
 
-            else
-            {
-                gpio_set_level(celChargerPort1, 0);
-            }
+           
         }
     }
 }
@@ -930,7 +934,7 @@ void coin_system_init(void)
 {
     /*
      * --------------------------------------------------------
-     * SALIDA DEL CARGADOR
+     * CONFIGURACION DE PIN DE SALIDA DEL CARGADOR
      * --------------------------------------------------------
      */
 
@@ -943,7 +947,7 @@ void coin_system_init(void)
 
     ESP_ERROR_CHECK(gpio_config(&charger_config));
 
-    gpio_set_level(celChargerPort1, 0);
+    gpio_set_level(celChargerPort1, 1);
 
     /*
      * --------------------------------------------------------
@@ -961,7 +965,8 @@ void coin_system_init(void)
 
     /*
      * --------------------------------------------------------
-     * COIN ACCEPTOR
+     * cONFIGURACION DE PIN LECTURA DE COIN ACCEPTOR
+     * DETECION DE PULSO POSITIVO
      * --------------------------------------------------------
      */
 
@@ -988,7 +993,6 @@ void coin_system_init(void)
             TAG,
             "Error instalando ISR: %s",
             esp_err_to_name(err));
-
         return;
     }
 
@@ -1004,6 +1008,7 @@ void coin_system_init(void)
     /*
      * --------------------------------------------------------
      * TAREA DE MONEDAS
+     * DESPUES DE DETECTAR UNA MONEDA SE LLAMA A TAREA vTask_Coin
      * --------------------------------------------------------
      */
 
@@ -1018,6 +1023,7 @@ void coin_system_init(void)
     /*
      * --------------------------------------------------------
      * TAREA DE CRÉDITO
+     * SE ENCARGA DE IR DESCONTANDO EL TIEMPO DE CREDITO HASTA LLEGAR A CERO Y APAGAR SALIDA
      * --------------------------------------------------------
      */
 
@@ -1045,7 +1051,7 @@ void app_main(void)
         return;
     }
 
-    init_PIN();
+    //init_PIN();
 
     init_ssd1306(); // Inicializar la pantalla OLED
 
@@ -1062,7 +1068,6 @@ void app_main(void)
     }
 
     ESP_ERROR_CHECK(ret);
-
     ESP_LOGI(TAG, "NVS inicializada correctamente");
 
     // Recuperar contador
@@ -1070,7 +1075,6 @@ void app_main(void)
     accounting_button_init();
 
     wifi_init_sta();
-
     // Lanzar OTA
     create_tasks();
 
